@@ -36,11 +36,13 @@ volatile bool blinkRightEnable = 0;
 volatile bool blinkLeftEnable = 0;
 volatile long rEC = 0; //pulse counter right
 volatile long lEC = 0; //pulse counter left 
-volatile bool drivingEnable; //allows driving
+//volatile bool drivingEnable; //allows driving
 volatile bool hazState; //hazard light loop state
 volatile int rASET = 0;
 volatile int lASET = 0;
 volatile int hazCounter = 0;
+volatile float echoTime;
+volatile float calculatedDistance;
 
 //constants
 #define ENC_pf 1330 
@@ -48,6 +50,7 @@ volatile int hazCounter = 0;
 #define RIGHT 1 //right turn macro
 #define LEFT 0 //left turn macro
 #define maxSpeed 150
+#define boundary 12 //centimeters
 
 
 
@@ -81,7 +84,7 @@ void setup() {//---------------------------SETUP--------------------------------
 //Interrupts
   attachInterrupt(digitalPinToInterrupt(lENC), lENC_ISR, FALLING);
   attachInterrupt(digitalPinToInterrupt(rENC), rENC_ISR, RISING);
-  attachInterrupt(digitalPinToInterrupt(usInt), us_ISR, RISING);
+  //attachInterrupt(digitalPinToInterrupt(usInt), us_ISR, RISING);
 }
 
 
@@ -96,7 +99,8 @@ void loop() {//Do nothing
   digitalWrite(rBlink,HIGH);
   blinkRightEnable = 0;
   blinkLeftEnable = 0;
-  
+
+  //---------------------STOPPED UNTIL BUTTON PRESS--------------------------------------
   do {digitalWrite(lBlink,HIGH); //No break lights
   digitalWrite(rBlink,HIGH);
   } while (digitalRead(button) == LOW); //wait for button press
@@ -105,13 +109,12 @@ void loop() {//Do nothing
   digitalWrite(lBlink,LOW); //No break lights
   digitalWrite(rBlink,LOW);
 
-  usFunction();//---------------------------------------------------------------------------------------------->
   
   //-----------forward back test---------------
-  driveStraight(2,1);
-  turn(180, RIGHT);
-  driveStraight(2,1);
-  turn(180, LEFT);
+//  driveStraight(2,1);
+//  turn(180, RIGHT);
+//  driveStraight(2,1);
+//  turn(180, LEFT);
 
   //-----------EC TEST---------------------
 //  driveStraight(2,1);
@@ -127,6 +130,15 @@ void loop() {//Do nothing
 //  driveStraight(2,1);
 //  turn(90, LEFT);
 
+  //-------Test-------------
+  driveStraight(1,1);
+  turn(90, RIGHT);
+  driveStraight(1,1); //1,3,6,7
+  turn(90, LEFT);
+  driveStraight(1,1); //3,4,6
+  turn(90, RIGHT);
+  driveStraight(1,1); //2,7
+
 }
 
 
@@ -140,6 +152,9 @@ void driveStraight(float dist, bool direc){//distance in feet, if direction is 1
   rEC = 0;
   lEC = 0;
   int d = dist*ENC_pf; //calculates pulses needed for certain distance
+  //start moving
+  blinkLeftEnable = 0;
+  blinkRightEnable = 0;
   if (direc){//checks direction specified
     digitalWrite(lFWD,HIGH);
     digitalWrite(rFWD,HIGH);
@@ -151,59 +166,27 @@ void driveStraight(float dist, bool direc){//distance in feet, if direction is 1
     digitalWrite(rFWD,LOW);
     digitalWrite(lBCK,HIGH);
     digitalWrite(rBCK,HIGH);
-
   }
-  
-  //start moving
-  do {
-      usFunction();
-      if(drivingEnable){//DRIVE
-          blinkLeftEnable = 0;
-          blinkRightEnable = 0;
-          if (direc){//checks direction specified
-                digitalWrite(lFWD,HIGH);
-                digitalWrite(rFWD,HIGH);
-                digitalWrite(lBCK,LOW);
-                digitalWrite(rBCK,LOW);
-              }
-              else{
-                digitalWrite(lFWD,LOW);
-                digitalWrite(rFWD,LOW);
-                digitalWrite(lBCK,HIGH);
-                digitalWrite(rBCK,HIGH);
-                  }
-          //speed up and slow down funcs-------------------------------------
-          if (rEC == 0 && drivingEnable){ //speed up at beginning
-              speedUp(0.8);
-          }
-          if(rEC >= d-200 && drivingEnable){ //slow down at end
-            speedDown(RIGHT);
-            if (rEC >= d){ 
-              analogWrite(rPWM, 0);  
-            }
-            if (lEC >= d){
-              analogWrite(lPWM, 0);
-            }
-          }
-          if(lEC >= d-200 && drivingEnable){ //slow down at end
-            speedDown(LEFT);
-            if (rEC >= d){ 
-              analogWrite(rPWM, 0);  
-            }
-            if (lEC >= d){
-              analogWrite(lPWM, 0);
-            }
-          }
+   //speed up and slow down funcs
+   speedUp(0.7);
+   int i=0;
+   do{
+      i += 1;
+      if (direc && i%7 == 0){
+        usFunction(); //sets the driving enable data
       }
-      else{
-        //HAZARD PROTOCOL
-        //counter
-        hazCounter += 1;
-        hazCounter = hazCounter%100;
-        if(hazCounter==0){
-          hazState = digitalRead(rBlink);
-          digitalWrite(rBlink,!hazState);
-          digitalWrite(lBlink,!hazState); 
+      if(rEC >= d-200){ //slow down at end
+        speedDown(RIGHT);
+        if (rEC >= d){ 
+          analogWrite(rPWM, 0);
+          rASET = 0;  
+        }
+      }
+      if(lEC >= d-200){ //slow down at end
+        speedDown(LEFT);
+        if (lEC >= d){
+          analogWrite(lPWM, 0);
+          lASET = 0;
         }
       }
       
@@ -245,22 +228,22 @@ void turn(float tAngle, bool direc){ //turn some amount of degrees,
     blinkLeftEnable = 1;
   }
   //speed up
+  speedUp(0.5);
   do {
-      if (rEC == 0){ //speed up at beginning
-              speedUp(0.5);
-          }
-          if(rEC >= d-100){ //slow down at end
-            speedDown(RIGHT);
-            if (rEC >= d){ 
-              analogWrite(rPWM, 0);  
-            }
-          }
-          if(lEC >= d-100){ //slow down at end
-            speedDown(LEFT);
-            if (lEC >= d){
-              analogWrite(lPWM, 0);
-            }
-          }
+    if(rEC >= d-100){ //slow down at end
+      speedDown(RIGHT);
+      if (rEC >= d){ 
+        analogWrite(rPWM, 0);
+        rASET = 0;
+      }
+    }
+    if(lEC >= d-100){ //slow down at end
+      speedDown(LEFT);
+      if (lEC >= d){
+        analogWrite(lPWM, 0);
+        lASET = 0;
+      }
+    }
     }while(rEC < d && lEC < d); //wait for movement to finish
   
   //Turn direction control off once condition met
@@ -285,25 +268,19 @@ void rENC_ISR(){
   rEC++;
   blinkers();
 }
-void us_ISR(){ 
-  drivingEnable = 0; //driving disabled
-
-  digitalWrite(rFWD,LOW); //stop moving
-  digitalWrite(rBCK,LOW);
-  digitalWrite(lFWD,LOW);
-  digitalWrite(lBCK,LOW);
-  
-}
+//void us_ISR(){ 
+//  drivingEnable = 0; //driving disabled
+//}
 
 
 //----------------------SPEEDUP/SLOWDOWN-----------
 void speedUp(float frac){
   rASET = 0;
   lASET = 0;
-  for (int i = 0; i < maxSpeed * frac ; i+=5){
+  for (int i = 0; i < maxSpeed * frac ; i+=10){
             //This loop speeds up the robot slowly
             analogWrite(rPWM,i);
-            analogWrite(lPWM,i-2);
+            analogWrite(lPWM,i);
             rASET = i;
             lASET = i;
    }
@@ -341,11 +318,6 @@ void blinkers(){
 
 //------------------------------------------------------------US Sensor----------------------------
 void usFunction(){
-  float echoTime;
-  float calculatedDistance;
-  //bool entityPresent;
-  const float boundary = 12; //centimeters
-
   //send out an ultrasonic pulse for 10us
   digitalWrite(trigPin, HIGH);
   delayMicroseconds(10); 
@@ -354,12 +326,24 @@ void usFunction(){
   echoTime = pulseIn(echoPin, HIGH);//pulsein returnsvlength of pulse                        
   calculatedDistance = echoTime*(0.017);//calculate the distance of the object
   if (calculatedDistance >= boundary){
-    digitalWrite(objDetected, LOW); //do nothing
-    drivingEnable = 1;
+    //digitalWrite(objDetected, LOW); //do nothing
+    digitalWrite(rFWD,HIGH); //stop moving
+    digitalWrite(rBCK,LOW);
+    digitalWrite(lFWD,HIGH);
+    digitalWrite(lBCK,LOW);
   }
   else{
-    digitalWrite(objDetected, HIGH); //send to interrrupt pin
+    hazCounter += 1;
+    hazCounter = hazCounter%500;
+    if(hazCounter==0){
+      hazState = digitalRead(rBlink);
+      digitalWrite(rBlink,!hazState);
+      digitalWrite(lBlink,!hazState);
+    }
+    digitalWrite(rFWD,LOW); //stop moving
+    digitalWrite(rBCK,LOW);
+    digitalWrite(lFWD,LOW);
+    digitalWrite(lBCK,LOW);
+    usFunction();
   }
-  //Serial.println(calculatedDistance);
 }
-  
