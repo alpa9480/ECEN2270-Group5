@@ -1,18 +1,24 @@
-//Blinkers
+ //Blinkers
 //Calibrated for Alexis robot
 
-//Pin values
+//for Rylan robot: 
+//#define button 3
+//#define rBlink 19
+//#define lBlink 18
+
+//Pin values- Alexis
+#define rBlink 3
+#define lBlink 19 //---I2C pin
+#define button 6
+
 #define rENC 2
 #define lENC 4
-#define button 6
 #define rFWD 7
 #define rBCK 8
 #define rPWM 9
 #define lFWD 11
 #define lBCK 12
 #define lPWM 10
-#define rBlink 3
-#define lBlink 19 //---I2C pin
 #define trigPin 14
 #define echoPin 15
 #define objDetected 16
@@ -111,10 +117,11 @@ void loop() {//Do nothing
 
   
   //-----------forward back test---------------
-//  driveStraight(2,1);
-//  turn(180, RIGHT);
-//  driveStraight(2,1);
-//  turn(180, LEFT);
+  driveStraight(4,1);
+  turn(180, RIGHT);
+  driveStraight(4,1);
+  turn(180, LEFT);
+
 
   //-----------EC TEST---------------------
 //  driveStraight(2,1);
@@ -131,13 +138,13 @@ void loop() {//Do nothing
 //  turn(90, LEFT);
 
   //-------Test-------------
-  driveStraight(1,1);
-  turn(90, RIGHT);
-  driveStraight(1,1); //1,3,6,7
-  turn(90, LEFT);
-  driveStraight(1,1); //3,4,6
-  turn(90, RIGHT);
-  driveStraight(1,1); //2,7
+//  driveStraight(1,1);
+//  turn(90, RIGHT);
+//  driveStraight(1,1); //1,3,6,7
+//  turn(90, LEFT);
+//  driveStraight(1,1); //3,4,6
+//  turn(90, RIGHT);
+//  driveStraight(1,1); //2,7
 
 }
 
@@ -344,6 +351,6 @@ void usFunction(){
     digitalWrite(rBCK,LOW);
     digitalWrite(lFWD,LOW);
     digitalWrite(lBCK,LOW);
-    usFunction();
+    usFunction(); //recurse
   }
 }
